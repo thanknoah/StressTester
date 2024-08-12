@@ -1,4 +1,4 @@
-// Imports
+// Imports [NOTE ONLY SUPPORTS WINDOWS]
 #include <string>
 #include <cstring>
 #include <iostream>
@@ -6,6 +6,7 @@
 #include <vector>
 #include <asio.hpp>
 #include <cctype>
+#include <windows.h>
 
 // Using for requests
 using asio::ip::tcp;
@@ -150,6 +151,20 @@ std::string toLowerCase(const std::string& input) {
     return result;
 }
 
+// Get device info
+void getRamInfo() {
+    MEMORYSTATUSEX STATEX;
+    STATEX.dwLength = sizeof(STATEX);
+
+    if (GlobalMemoryStatusEx(&STATEX)) {
+        std::cout << "Total RAM Available: " << STATEX.ullTotalPhys / (1024 * 1024 * 1024) << " GB" << std::endl;
+    }
+}
+
+void getCpuCores() {
+    std::cout << "Number of CPU cores: " << std::thread::hardware_concurrency() << " Cores" << std::endl;
+}
+
 int main() {
     // Essential Variables
     std::string connectionType;
@@ -161,9 +176,14 @@ int main() {
     int amountOfFakeUsers;
     int amountOfThreads = 1;
     int durationOfThreads;
-
+    
+    const WORD PURPLE = FOREGROUND_RED | FOREGROUND_BLUE;
+    SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), PURPLE);
+    
     std::cout << "StressTester V1.0 Beta" << std::endl;
     std::cout << "Welcome back user.\n" << std::endl;
+    getRamInfo();
+    getCpuCores();
     std::cout << "Connection type [TCP, UDP, etc] >> ";
 
     // Setting Variables /w input
