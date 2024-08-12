@@ -144,16 +144,16 @@ std::string toLowerCase(const std::string& input) {
 }
 
 void getRamInfo() {
-    MEMORYSTATUSEX STATEX;
-    STATEX.dwLength = sizeof(STATEX);
+    MEMORYSTATUSEX STATEX_;
+    STATEX_.dwLength = sizeof(STATEX_);
 
-    if (GlobalMemoryStatusEx(&STATEX)) {
-        std::cout << "Total RAM Available: " << STATEX.ullTotalPhys / (1024 * 1024 * 1024) << " GB" << std::endl;
+    if (GlobalMemoryStatusEx(&STATEX_)) {
+        std::cout << "Total RAM Available: " << STATEX_.ullTotalPhys / (1024 * 1024 * 1024) << " GB" << std::endl;
     }
 }
 
 void getCpuCores() {
-    std::cout << "Number of CPU cores: " << std::thread::hardware_concurrency() << " Cores" << std::endl;
+    std::cout << "Number of CPU cores [AVAILABLE TO USE]: " << std::thread::hardware_concurrency()-1 << " Cores" << std::endl << "\n";
 }
 
 int main() {
@@ -165,13 +165,13 @@ int main() {
     std::string msg;
     int packetSize;
     int amountOfFakeUsers;
-    int amountOfThreads = 1;
+    int amountOfThreads;
     int durationOfThreads;
-    
+
     const WORD PURPLE = FOREGROUND_RED | FOREGROUND_BLUE;
     SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), PURPLE);
-    
-    std::cout << "StressTester V1.0 Beta" << std::endl;
+
+    std::cout << "StressTester V1.3 Beta" << std::endl;
     std::cout << "Welcome back user.\n" << std::endl;
     getRamInfo();
     getCpuCores();
@@ -184,6 +184,8 @@ int main() {
         std::cin >> amountOfFakeUsers;
         std::cout << "Duration (s) >> ";
         std::cin >> durationOfThreads;
+        std::cout << "Amount of Threads to use >> ";
+        std::cin >> amountOfThreads;
 
         if (toLowerCase(connectionType) == "tcp" || toLowerCase(connectionType) == "udp") {
             std::cout << "IP address >> ";
@@ -206,7 +208,7 @@ int main() {
             packetSize = packetSize * 1024;
         }
 
-        if (amountOfThreads > std::thread::hardware_concurrency()) {
+        if (amountOfThreads > std::thread::hardware_concurrency()-1) {
             throw std::runtime_error("Exceeded thread limit");
         }
 
@@ -226,7 +228,7 @@ int main() {
 
     // Create threads
     ThreadManager threads;
-    threads.numThreads = 1;
+    threads.numThreads = amountOfThreads;
     threads.durThreads = durationOfThreads;
     threads.amountOfUsersSimulate = amountOfFakeUsers;
     threads.ip = ip;
