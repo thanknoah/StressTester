@@ -59,7 +59,6 @@ public:
     std::string port;
     std::string msg;
 
-    // Intialise All Threads 
     void startThreads() {
         for (int n = 0; n < numThreads; ++n) {
             threads.emplace_back(std::thread(&ThreadManager::tcpConnection, this, n));
@@ -74,7 +73,6 @@ public:
         }
     }
 
-    // Connection
     void tcpConnection(int threadId) {
         std::cout << "\nThread [" << threadId << "] is executing.\n" << std::endl;
         std::this_thread::sleep_for(std::chrono::seconds(5));
@@ -101,7 +99,6 @@ private:
         }
     }
 
-    // Send packets
     void startStressTestPacket(int totalAmountOfClients) {
         auto client = std::make_unique<TcpClientConnection>(ip, port);
         const int CHUNK_SIZE = 64 * 1024;
@@ -119,7 +116,6 @@ private:
         }
     }
 
-    // Sends specific message
     void startStressTestMsg(int totalAmountOfClients) {
         auto client = std::make_unique<TcpClientConnection>(ip, port);
 
@@ -135,7 +131,6 @@ private:
     }
 };
 
-// Error handling
 void errHandler(int var1, int var2) {
     std::cerr << "Setting to default settings...";
     var1 = 1000;
@@ -151,7 +146,6 @@ std::string toLowerCase(const std::string& input) {
     return result;
 }
 
-// Get device info
 void getRamInfo() {
     MEMORYSTATUSEX STATEX;
     STATEX.dwLength = sizeof(STATEX);
