@@ -7,8 +7,6 @@
 #include <asio.hpp>
 #include <cctype>
 #include <windows.h>
-
-// Using for requests
 using asio::ip::tcp;
 
 class TcpClientConnection {
