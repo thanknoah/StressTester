@@ -65,7 +65,6 @@ public:
             threads.emplace_back(std::thread(&ThreadManager::counter, this));
         }
 
-        // Join threads
         for (auto& thread : threads) {
             thread.join();
         }
