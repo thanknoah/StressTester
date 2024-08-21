@@ -11,40 +11,52 @@
 
 using asio::ip::tcp;
 
-class TcpClientConnection {
-
+class TcpClientConnection : public std::enable_shared_from_this<TcpClientConnection> {
 public:
-    TcpClientConnection(const std::string& server, const std::string& port) : ioContext(), socket(ioContext) {
-        tcp::resolver resolver(ioContext);
-        endPoints = resolver.resolve(server, port);
-    }
+    TcpClientConnection(asio::io_context& ioContext, const tcp::endpoint& endPoint, const std::string& message, bool& responseEnabled, int& duration)
+        : socket(ioContext), endPoints(endPoint), message(message), responseEnabled(responseEnabled), duration(duration) {}
 
     void connect() {
-        asio::connect(socket, endPoints);
+        auto self(shared_from_this());
+        socket.async_connect(endPoints, [this, self](asio::error_code ec) {
+             if (!ec) {
+                 doRequestWork();
+             }
+        });
     }
 
-    void sendMsg(const std::string& msg, bool responseEnabled) {
-        if (responseEnabled) {
-            asio::async_write(socket, asio::buffer(msg),
-                [this](const asio::error_code& ec, std::size_t len) {
-                    if (!ec) {
-                        recieveMsg();
-                    }
-                });
-        }
-        else {
-            asio::async_write(socket, asio::buffer(msg),
-                [this](const asio::error_code& ec, std::size_t len) {
-                    if (!ec) {
-                        // std::cout << "[TCP_CLIENT]: SENT MSG TO SERVER\n";
-                    }
-                });
-        }
+    void doRequestWork() {
+        auto self(shared_from_this());
+        if (responseEnabled) { sendMsgResponse(); }
+        if (!responseEnabled) { sendMsg(); }
     }
+
+private:
+    void sendMsgResponse() {
+        auto self(shared_from_this());
+        asio::async_write(socket, asio::buffer(message),
+            [this, self](const asio::error_code& ec, std::size_t len) {
+                if (!ec) {
+                    //e
+                }
+            });
+    }
+
+    void sendMsg() {
+        auto self(shared_from_this());
+        asio::async_write(socket, asio::buffer(message),
+            [this, self](const asio::error_code& ec, std::size_t len) {
+                if (!ec) {
+                    //e
+                }
+            });
+    }
+
 
     void sendPacket(char data[], int CHUNK_SIZE) {
+        auto self(shared_from_this());
         asio::async_write(socket, asio::buffer(data, CHUNK_SIZE),
-            [this](const asio::error_code& ec, std::size_t len) {
+            [this, self](const asio::error_code& ec, std::size_t len) {
                 if (!ec) {
                     // std::cout << "[TCP_CLIENT]: SENT PACKET TO SERVER\n";
                 }
@@ -52,8 +64,9 @@ public:
     }
 
     void recieveMsg() {
+        auto self(shared_from_this());
         asio::async_read_until(socket, responseBuffer, '\n',
-            [this](const asio::error_code& ec, std::size_t len) {
+            [this, self](const asio::error_code& ec, std::size_t len) {
                 if (!ec) {
                     std::istream resp_stream(&responseBuffer);
                     std::string resp;
@@ -66,29 +79,17 @@ public:
             });
     }
 
-    void close() {
-        asio::post(socket.get_executor(),
-            [this]() {
-                asio::error_code ec;
-                socket.shutdown(tcp::socket::shutdown_both, ec);
-                socket.close(ec);
-            });
-    }
-
-    void runAsync() {
-        ioContext.run();
-    }
-
-private:
     asio::io_context ioContext;
     asio::streambuf responseBuffer;
     tcp::socket socket;
-    tcp::resolver::results_type endPoints;
+    tcp::endpoint endPoints;
     std::array<char, 1024> data;
+    std::string message;
+    bool responseEnabled;
+    int duration;
 };
 
 class ThreadManager {
-
 public:
     int numThreads;
     int durThreads;
@@ -100,79 +101,35 @@ public:
     std::string msg;
 
     void startThreads() {
-        for (int n = 0; n < numThreads; ++n) {
-            threads.emplace_back(std::thread(&ThreadManager::tcpConnection, this, n));
-            std::cout << "Thread [#" << n << "] is executing." << std::endl;
-        }
-        for (int n = 0; n < 1; ++n) {
-            threads.emplace_back(std::thread(&ThreadManager::counter, this));
-            std::cout << "\nCounter intialized" << std::endl;
-        }
-        for (auto& thread : threads) {
-            thread.join();
-        }
-    }
-
-    void tcpConnection(int threadId) {
-        std::this_thread::sleep_for(std::chrono::seconds(2));
-        int totalAmountOfClients = amountOfUsersSimulate / numThreads;
-        auto client = std::make_unique<TcpClientConnection>(ip, port);
+        asio::io_context ioContext;
+        tcp::resolver resolver(ioContext);
+        auto endPoints = resolver.resolve(ip, port);
         auto start = std::chrono::high_resolution_clock::now();
 
-        try {
-            if (msg == "") {
-                startStressTestPacket(totalAmountOfClients);
-            }
-            else {
-                startStressTestMsg(totalAmountOfClients);
-            }
+        for (int i = 0; i < amountOfUsersSimulate; i++) {
+            auto client = std::make_shared<TcpClientConnection>(ioContext, *endPoints.begin(), msg, responseEnabled, durThreads);
+            client->connect();
         }
-        catch (const std::exception& e) {
-            std::cerr << e.what() << "\n";
+
+        for (int n = 0; n < 1; n++) {
+            threads.emplace_back([&ioContext]() {
+                ioContext.run();
+                });
+        }
+
+        for (auto& thread : threads) {
+            thread.join();
         }
 
         auto end = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> duration = end - start;
         std::cout << "Time taken: " << duration.count() << " seconds" << std::endl << "\n";
     }
-
 private:
     void counter() {
         while (durThreads != 0) {
             std::this_thread::sleep_for(std::chrono::seconds(1));
             durThreads--;
-        }
-    }
-
-    void startStressTestPacket(int totalAmountOfClients) {
-        auto client = std::make_unique<TcpClientConnection>(ip, port);
-        const int CHUNK_SIZE = 500 * 1024;
-        char buffer[CHUNK_SIZE];
-        memset(buffer, 'A', CHUNK_SIZE);
-
-        for (int y = 0; y < totalAmountOfClients; y++) {
-            client->connect();
-            client->sendPacket(buffer, CHUNK_SIZE);
-            client->close();
-            client->runAsync();
-            if (durThreads == 0) {
-                break;
-            }
-        }
-    }
-
-    void startStressTestMsg(int totalAmountOfClients) {
-        auto client = std::make_unique<TcpClientConnection>(ip, port);
-        auto start = std::chrono::high_resolution_clock::now();
-
-        for (int y = 0; y < totalAmountOfClients; y++) {
-            client->connect();
-            client->sendMsg(msg, responseEnabled);
-            client->close();
-            client->runAsync();
-            if (durThreads == 0) {
-                break;
-            }
         }
     }
 };
@@ -230,9 +187,9 @@ int main() {
 
         std::cout << "Enter Request Type [TCP only supported] >> ";
         std::cin >> connectionType;
-        std::cout << "Amount of Requests [Per 1s] >> ";
+        std::cout << "Amount of Requests [Total] >> ";
         std::cin >> amountOfFakeUsers;
-        std::cout << "\nDuration (s) >> ";
+        std::cout << "\nDuration (s) [NOT WORKING RN]>> ";
         std::cin >> durationOfThreads;
         std::cout << "Amount of Cores to use >> ";
         std::cin >> amountOfThreads;
@@ -268,9 +225,8 @@ int main() {
         }
 
         // Attempting to create socket
-        auto client = std::make_unique<TcpClientConnection>(ip, port);
-        client->connect();
-        client->close();
+        //auto client = std::make_unique<TcpClientConnection>(ip, port);
+        //client->connect();
     }
     catch (const std::runtime_error& e) {
         std::cerr << "Error: " << e.what() << std::endl;
