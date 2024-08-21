@@ -1,4 +1,4 @@
-StressTester 1.3 [Improving my C++ skills]
-- Custom Color Scheme
-- Performance increased by upto 20x
-- Thread system has been added
+StressTester V1.4 [Improving my C++ skills]
+- New Async Architecture Under The Hood
+- Peformance increased by upto 5-10x
+- Benchmarked, Core i9 10k: 7000-13000 RQS
