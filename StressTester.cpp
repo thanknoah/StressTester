@@ -13,22 +13,24 @@ using asio::ip::tcp;
 
 class TcpClientConnection : public std::enable_shared_from_this<TcpClientConnection> {
 public:
-    TcpClientConnection(asio::io_context& ioContext, const tcp::endpoint& endPoint, const std::string& message, bool& responseEnabled, int& duration)
-        : socket(ioContext), endPoints(endPoint), message(message), responseEnabled(responseEnabled), duration(duration) {}
+    TcpClientConnection(asio::io_context& ioContext, const tcp::endpoint& endPoint, const std::string& message, const bool& responseEnabled, int& duration, char* packet, int packetSize)
+        : socket(ioContext), endPoints(endPoint), message(message), responseEnabled(responseEnabled), duration(duration), packet(packet), packetSize(packetSize) {
+    }
 
     void connect() {
         auto self(shared_from_this());
         socket.async_connect(endPoints, [this, self](asio::error_code ec) {
-             if (!ec) {
-                 doRequestWork();
-             }
+            if (!ec) {
+                doRequestWork();
+            }
         });
     }
 
     void doRequestWork() {
         auto self(shared_from_this());
-        if (responseEnabled) { sendMsgResponse(); }
-        if (!responseEnabled) { sendMsg(); }
+        if (responseEnabled && !message.empty()) { sendMsgResponse(); }
+        if (!responseEnabled && !message.empty()) { sendMsg(); }
+        if (packetSize == 0) { sendPacket(packet, packetSize); }
     }
 
 private:
@@ -37,7 +39,7 @@ private:
         asio::async_write(socket, asio::buffer(message),
             [this, self](const asio::error_code& ec, std::size_t len) {
                 if (!ec) {
-                    //e
+                    std::cout << "Sent message";
                 }
             });
     }
@@ -47,7 +49,7 @@ private:
         asio::async_write(socket, asio::buffer(message),
             [this, self](const asio::error_code& ec, std::size_t len) {
                 if (!ec) {
-                    //e
+                    std::cout << "Sent message";
                 }
             });
     }
@@ -58,7 +60,7 @@ private:
         asio::async_write(socket, asio::buffer(data, CHUNK_SIZE),
             [this, self](const asio::error_code& ec, std::size_t len) {
                 if (!ec) {
-                    // std::cout << "[TCP_CLIENT]: SENT PACKET TO SERVER\n";
+                    std::cout << "[TCP_CLIENT]: SENT PACKET TO SERVER\n";
                 }
             });
     }
@@ -86,7 +88,9 @@ private:
     std::array<char, 1024> data;
     std::string message;
     bool responseEnabled;
+    int packetSize;
     int duration;
+    char* packet;
 };
 
 class ThreadManager {
@@ -105,16 +109,31 @@ public:
         tcp::resolver resolver(ioContext);
         auto endPoints = resolver.resolve(ip, port);
         auto start = std::chrono::high_resolution_clock::now();
+        const int PACKET_SIZE = 64 * 1024 * 1024;
+        char* packet = new char[PACKET_SIZE];
+
+        if (msg.empty()) { 
+            memset(packet, 'A', PACKET_SIZE); 
+        }
+        else {
+            memset(packet, 'A', 1);
+        }
 
         for (int i = 0; i < amountOfUsersSimulate; i++) {
-            auto client = std::make_shared<TcpClientConnection>(ioContext, *endPoints.begin(), msg, responseEnabled, durThreads);
-            client->connect();
+            if (msg.empty()) {
+                auto client = std::make_shared<TcpClientConnection>(ioContext, *endPoints.begin(), msg, responseEnabled, durThreads, packet, PACKET_SIZE);
+                client->connect();
+            }
+            else {
+                auto client = std::make_shared<TcpClientConnection>(ioContext, *endPoints.begin(), msg, responseEnabled, durThreads, packet, 0);
+                client->connect();
+            }
         }
 
         for (int n = 0; n < 1; n++) {
             threads.emplace_back([&ioContext]() {
                 ioContext.run();
-                });
+            });
         }
 
         for (auto& thread : threads) {
@@ -124,6 +143,7 @@ public:
         auto end = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> duration = end - start;
         std::cout << "Time taken: " << duration.count() << " seconds" << std::endl << "\n";
+        delete[] packet;
     }
 private:
     void counter() {
@@ -151,14 +171,13 @@ std::string toLowerCase(const std::string& input) {
 void getRamInfo() {
     MEMORYSTATUSEX STATEX_;
     STATEX_.dwLength = sizeof(STATEX_);
-
     if (GlobalMemoryStatusEx(&STATEX_)) {
         std::cout << "Total RAM Available: " << STATEX_.ullTotalPhys / (1024 * 1024 * 1024) << " GB" << std::endl;
     }
 }
 
 void getCpuCores() {
-    std::cout << "Number of CPU cores [AVAILABLE TO USE]: " << std::thread::hardware_concurrency() - 1 << " Cores" << std::endl << "\n";
+    std::cout << "Number of CPU Cores Available: " << std::thread::hardware_concurrency() - 1 << " Cores" << std::endl << "\n";
 }
 
 int main() {
@@ -177,7 +196,7 @@ int main() {
     const WORD PURPLE = FOREGROUND_RED | FOREGROUND_BLUE;
     SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), PURPLE);
 
-    std::cout << "StressTester V1.4 Beta" << std::endl;
+    std::cout << "StressTester V1.45 Beta" << std::endl;
     std::cout << "Welcome back user.\n" << std::endl;
 
     // Setting Variables /w input
@@ -189,8 +208,9 @@ int main() {
         std::cin >> connectionType;
         std::cout << "Amount of Requests [Total] >> ";
         std::cin >> amountOfFakeUsers;
-        std::cout << "\nDuration (s) [NOT WORKING RN]>> ";
-        std::cin >> durationOfThreads;
+        // std::cout << "\nDuration (s) >> ";
+        //std::cin >> durationOfThreads;
+        durationOfThreads = 90;
         std::cout << "Amount of Cores to use >> ";
         std::cin >> amountOfThreads;
         std::cout << "\nEnable Response [On, Off] >> ";
